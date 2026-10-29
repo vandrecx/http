@@ -100,6 +100,7 @@ int main(){
     do{
         if(iReceiveResult>0){ 
             printf("Bytes received: %d\n", iReceiveResult);
+            printf("%s\n", recvbuf);
 
             int iSendResult = send(ClientSocket, recvbuf, iReceiveResult, 0);
             if(iSendResult == SOCKET_ERROR){
@@ -129,7 +130,7 @@ int main(){
     }
 
     //Acho que finalizada a construção desse Servidor próximo passo agora é modularizar de acordo com a necessidade e prosseguir com o plano
-    //-Muito código repetido, acho que uma boa modularização deve ser feita em cima do passo a passo descrito no começo
+    //-Muito código repetido, acho que uma boa modularização deve ser feita em cima do passo a passo descrito no topo
     //-Construir um HTTP em cima disso
 
 }
