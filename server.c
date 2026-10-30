@@ -25,7 +25,7 @@
 
 struct addrinfo *result=NULL, *ptr=NULL, hints; //Precisa do netdb.h, porém não existe ntivamente no windows
 
-int main(){
+void initializeWinsock(){ 
     WSADATA wsaData;
 
     int iWsaResult = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -33,51 +33,79 @@ int main(){
         printf("WSAStartup failed with error: %d\n", iWsaResult);
         //Coloquei isso aqui pelo fato de ser um processo WSAAPI, mas na ref não usa diretamente nessa exceção
         WSACleanup();
-        return 1;
-    }
+        return;
+    }    
+}
 
+void translateAddress(){ 
     ZeroMemory(&hints, sizeof(hints)); //aqui precisava do winbase.h, mas só o windows.h já cobria a necessidade; Serve pra zerar toda referência 
     hints.ai_family = AF_INET; //especifica ipv4, aparentemente AF_INET é padrão ipv4, mas se precisar do ipv6 é AF_INET6
     hints.ai_socktype = SOCK_STREAM; //conexao de dupla via, usa TCP
     hints.ai_protocol = IPPROTO_TCP; //define a conexão tcp
-    hints.ai_flags = AI_PASSIVE; //n vai agir de forma ativa em enviar mensagens ou se conectar, tlvz seja importante eventualmente tlvz mudar p mandar response
-
-    //Ai pra AddressInfo
+    hints.ai_flags = AI_PASSIVE; //n vai agir de forma ativa em enviar mensagens ou se conectar, tlvz seja importante eventualmente tlvz mudar p mandar response 
+    
+        //Ai pra AddressInfo
     int iAiResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
     if (iAiResult != 0) { 
         printf("getaddrinfo failed: %d\n", iAiResult);
         WSACleanup();
-        return 1;
+        return;
     }
+}
 
-    SOCKET ListenSocket = INVALID_SOCKET;
-    ListenSocket = socket(result->ai_family,result->ai_socktype,result->ai_protocol);//aqui aceita parametros na mão de acordo com a ref mas o struct result já armazena os dados
+SOCKET setSocket(SOCKET ListenSocket){ 
+    ListenSocket = socket(result->ai_family,result->ai_socktype,result->ai_protocol);
 
-    //Trata exceção de erro na criação do socket
     if (ListenSocket == INVALID_SOCKET) {
         printf("Error at socket(): %d\n", WSAGetLastError());
         freeaddrinfo(result);
         WSACleanup();
-        return 1;
+        return ListenSocket;
     }
 
-    int iBindResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen); //qnd o socket é criado ele n tem endereço nenhum atrelado a ele e bind() serve justamente pra isso
-    //Trata exceção do bind
-    if (iBindResult == SOCKET_ERROR) {
+    return ListenSocket;
+}
+
+void bindSocket(SOCKET ListenSocket){ 
+
+    if (bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen) == SOCKET_ERROR) {
         printf("bind failed with error: %d\n", WSAGetLastError());
         freeaddrinfo(result);
         closesocket(ListenSocket);
         WSACleanup();
-        return 1;
+        return;
     }
 
-    //a função listen modifica o estado do servidor par aque ele possa aceitar conexões estrangeiras pra um socket definido no parâmetro
+}
+
+void listenMode(SOCKET ListenSocket){ 
     if ( listen( ListenSocket, SOMAXCONN ) == SOCKET_ERROR ) {
         printf( "Listen failed with error: %d\n", WSAGetLastError() );
         closesocket(ListenSocket);
         WSACleanup();
-        return 1;
+        return ;
     }
+}
+
+void closeConnection(SOCKET ClientSocket){ 
+    int iShutResult = shutdown(ClientSocket, SD_SEND);
+    if(iShutResult==SOCKET_ERROR){ 
+        printf("Shutdown failed: %d\n", WSAGetLastError());
+        closesocket(ClientSocket);
+        WSACleanup();
+        return;
+    }
+}
+
+int main(){
+    initializeWinsock();
+
+    translateAddress();
+
+    SOCKET ListenSocket = INVALID_SOCKET;
+    ListenSocket = setSocket(ListenSocket);
+    bindSocket(ListenSocket);
+    listenMode(ListenSocket);
 
     SOCKET ClientSocket=INVALID_SOCKET;
 
@@ -121,13 +149,7 @@ int main(){
     } while(iReceiveResult>0);
 
     //Desligamento do Socket
-    int iShutResult = shutdown(ClientSocket, SD_SEND);
-    if(iShutResult==SOCKET_ERROR){ 
-        printf("Shutdown failed: %d\n", WSAGetLastError());
-        closesocket(ClientSocket);
-        WSACleanup();
-        return 1;
-    }
+    closeConnection(ClientSocket);
 
     //Acho que finalizada a construção desse Servidor próximo passo agora é modularizar de acordo com a necessidade e prosseguir com o plano
     //-Muito código repetido, acho que uma boa modularização deve ser feita em cima do passo a passo descrito no topo
